@@ -5,15 +5,34 @@ import { toNodeHandler, fromNodeHeaders } from "better-auth/node";
 const { Pool } = pg;
 const app = express();
 const authHandler = toNodeHandler(auth);
-app.all("/api/auth/*splat", async (req, res, next) => {
+app.use(async (req, res, next) => {
+  const pathname = (req.url || "").split("?")[0];
+  const isAuthPath =
+    pathname === "/api/auth" ||
+    pathname.startsWith("/api/auth/") ||
+    pathname === "/auth" ||
+    pathname.startsWith("/auth/");
+
+  if (!isAuthPath) return next();
+
+  // Vercel may pass the catch-all function a path with /api removed.
+  // Better Auth expects its configured /api/auth base path.
+  if (pathname === "/auth" || pathname.startsWith("/auth/")) {
+    req.url = `/api${req.url}`;
+  }
+
   try {
     await ensureAuthSchema();
     return authHandler(req, res, next);
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
-app.use((req,_res,next)=>{if(req.url.startsWith("/api/"))req.url=req.url.slice(4);next();});
+
+app.use((req, _res, next) => {
+  if (req.url.startsWith("/api/")) req.url = req.url.slice(4);
+  next();
+});
 app.use(express.json({limit:"1mb"}));
 const pool=new Pool({connectionString:process.env.DATABASE_URL,ssl:{rejectUnauthorized:false},max:1,idleTimeoutMillis:10000,connectionTimeoutMillis:10000});
 let schemaReady;
