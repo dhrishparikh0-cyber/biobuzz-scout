@@ -10,8 +10,8 @@ const apiFetch=async(url,options={})=>{
   const body=await response.clone().text();
   if(!body.trim())return null;
   try{return JSON.parse(body)}catch{
-   const preview=body.replace(/\\s+/g," ").slice(0,100);
-   if(/^\\s*(<!doctype html|<html|The page)/i.test(body))throw new Error("BioBuzz reached a webpage instead of its API (HTTP "+response.status+"). The API route may not have deployed correctly. Refresh and try again shortly.");
+   const preview=body.replace(/\s+/g," ").slice(0,100);
+   if(/^\s*(<!doctype html|<html|The page)/i.test(body))throw new Error("BioBuzz reached a webpage instead of its API (HTTP "+response.status+"). The API route may not have deployed correctly. Refresh and try again shortly.");
    throw new Error("BioBuzz received an invalid API response (HTTP "+response.status+"): "+(preview||"Empty response"));
   }
  };
