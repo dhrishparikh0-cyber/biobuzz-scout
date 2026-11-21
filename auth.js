@@ -37,13 +37,6 @@ export const auth = betterAuth({
     "http://localhost:3000",
     ...(process.env.APP_ORIGIN ? [process.env.APP_ORIGIN] : []),
   ],
-  socialProviders: process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET ? {
-    google: {
-      clientId: process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      requireEmailVerification: true,
-    },
-  } : {},
   plugins: [
     emailOTP({
       otpLength: 6,
