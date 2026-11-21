@@ -5,6 +5,17 @@ import { toNodeHandler, fromNodeHeaders } from "better-auth/node";
 const { Pool } = pg;
 const app = express();
 const authHandler = toNodeHandler(auth);
+
+// Reconstruct the original API path when Vercel forwards through api/index.js.
+app.use((req, _res, next) => {
+  const forwarded = req.query?.path;
+  if (typeof forwarded === "string" && forwarded.length) {
+    const parsed = new URL(req.url || "/", "http://localhost");
+    parsed.searchParams.delete("path");
+    req.url = "/api/" + forwarded.replace(/^\\/+/, "") + parsed.search;
+  }
+  next();
+});
 app.use(async (req, res, next) => {
   const pathname = (req.url || "").split("?")[0];
   const isAuthPath =
@@ -113,4 +124,8 @@ const cols=fields.join(",");
 app.post("/scouting",async(req,res)=>{try{await ensureSchema();const v=values(req.body||{}),p=v.map((_,i)=>"$"+(i+1)).join(",");const saved=await pool.query("INSERT INTO scouting_records("+cols+",created_by_email) VALUES("+p+",$"+(v.length+1)+") RETURNING id",[...v,req.user.email]);await pool.query("INSERT INTO activity_logs(actor_email,action,entity_type,entity_id,details) VALUES($1,$2,$3,$4,$5::jsonb)",[req.user.email,"report_published","scouting_report",String(saved.rows[0].id),JSON.stringify({team_id:v[1],match_number:v[0],alliance:v[2]})]);res.status(201).json({ok:true});}catch(e){res.status(400).json({error:e.message||"Could not save report."});}});
 app.put("/scouting/:id",async(req,res)=>{try{await ensureSchema();const id=Number(req.params.id);if(!Number.isInteger(id)||id<1)return res.status(400).json({error:"Invalid report ID."});const old=await pool.query("SELECT created_by_email FROM scouting_records WHERE id=$1",[id]);if(!old.rowCount)return res.status(404).json({error:"Report not found."});if(req.user.role!=="mentor"&&old.rows[0].created_by_email!==req.user.email)return res.status(403).json({error:"Students can only edit their own reports."});const v=values(req.body||{}),set=fields.map((k,i)=>k+"=$"+(i+1)).join(",");await pool.query("UPDATE scouting_records SET "+set+" WHERE id=$"+(v.length+1),[...v,id]);await pool.query("INSERT INTO activity_logs(actor_email,action,entity_type,entity_id,details) VALUES($1,$2,$3,$4,$5::jsonb)",[req.user.email,"report_updated","scouting_report",String(id),JSON.stringify({team_id:v[1],match_number:v[0],alliance:v[2]})]);res.json({ok:true});}catch(e){res.status(400).json({error:e.message||"Could not update report."});}});
 app.delete("/scouting/:id",async(req,res)=>{if(req.user.role!=="mentor")return res.status(403).json({error:"Only mentors can delete reports."});try{await ensureSchema();const id=Number(req.params.id);if(!Number.isInteger(id)||id<1)return res.status(400).json({error:"Invalid report ID."});const r=await pool.query("DELETE FROM scouting_records WHERE id=$1 RETURNING id,team_id,match_number",[id]);if(!r.rowCount)return res.status(404).json({error:"Report not found."});await pool.query("INSERT INTO activity_logs(actor_email,action,entity_type,entity_id,details) VALUES($1,$2,$3,$4,$5::jsonb)",[req.user.email,"report_deleted","scouting_report",String(id),JSON.stringify({team_id:r.rows[0].team_id,match_number:r.rows[0].match_number})]);res.json({ok:true});}catch{res.status(500).json({error:"Could not delete report."});}});
+
+app.use((req,res)=>res.status(404).json({error:"API route not found.",path:req.path}));
+app.use((error,req,res,next)=>{if(res.headersSent)return next(error);console.error("BioBuzz API error:",error);res.status(500).json({error:"The server could not complete this request."});});
+
 export default app;
