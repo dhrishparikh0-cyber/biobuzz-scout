@@ -12,7 +12,7 @@ app.use((req, _res, next) => {
   if (typeof forwarded === "string" && forwarded.length) {
     const parsed = new URL(req.url || "/", "http://localhost");
     parsed.searchParams.delete("path");
-    req.url = "/api/" + forwarded.replace(/^\\/+/, "") + parsed.search;
+    req.url = "/api/" + forwarded.replace(/^\/+/, "") + parsed.search;
   }
   next();
 });
