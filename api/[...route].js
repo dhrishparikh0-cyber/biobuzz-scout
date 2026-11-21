@@ -1,10 +1,8 @@
 import express from "express";
 import pg from "pg";
-import { toNodeHandler, fromNodeHeaders } from "better-auth/node";
-import { auth, roleForEmail } from "../auth.js";
+import { roleForEmail } from "../auth.js";
 const { Pool } = pg;
 const app = express();
-app.all("/api/auth/*splat",toNodeHandler(auth));
 app.use((req,_res,next)=>{if(req.url.startsWith("/api/"))req.url=req.url.slice(4);next();});
 app.use(express.json({limit:"1mb"}));
 const pool=new Pool({connectionString:process.env.DATABASE_URL,ssl:{rejectUnauthorized:false},max:1,idleTimeoutMillis:10000,connectionTimeoutMillis:10000});
@@ -28,15 +26,13 @@ async function ensureSchema(){
  await schemaReady;
 }
 async function requireUser(req,res,next){
- try{
-  const session=await auth.api.getSession({headers:fromNodeHeaders(req.headers)});
-  if(!session?.user?.email)return res.status(401).json({error:"Please sign in to continue."});
-  const email=session.user.email.trim().toLowerCase(),role=roleForEmail(email);
-  if(!role)return res.status(403).json({error:"This email is not approved for BioBuzz Scout."});
-  req.user={email,role,name:session.user.name||email};next();
- }catch(e){console.error("Session validation failed",e);res.status(401).json({error:"Your session could not be verified. Please sign in again."});}
+ const email=String(req.headers["x-scout-email"]||"").trim().toLowerCase();
+ const role=roleForEmail(email);
+ if(!email)return res.status(401).json({error:"Enter your approved email address to continue."});
+ if(!role)return res.status(403).json({error:"This email is not approved for BioBuzz Scout."});
+ req.user={email,role,name:email};next();
 }
-app.use((req,res,next)=>{if(req.path.startsWith("/auth/"))return next();requireUser(req,res,next);});
+app.use(requireUser);
 app.get("/me",(req,res)=>res.json(req.user));
 app.get("/health",async(_req,res)=>{try{await ensureSchema();await pool.query("SELECT 1");res.json({ok:true,database:"connected"});}catch{res.status(500).json({ok:false,error:"Database connection failed"});}});
 app.get("/teams",async(_req,res)=>{try{await ensureSchema();const r=await pool.query("SELECT team_id AS id,COUNT(*) AS matches,ROUND(AVG(pollen_auto+pollen_teleop+nectar_auto+nectar_teleop),1) AS avg_score FROM scouting_records GROUP BY team_id ORDER BY avg_score DESC");res.json(r.rows);}catch{res.status(500).json({error:"Could not load teams"});}});
