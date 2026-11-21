@@ -71,7 +71,7 @@ async function requireUser(req,res,next){
  }
 }
 app.use(requireUser);
-app.get("/me",(req,res)=>res.json(req.user));
+app.get("/me",async(req,res)=>{try{const r=await pool.query('SELECT name,image FROM "user" WHERE lower(email)=lower($1) LIMIT 1',[req.user.email]);res.json({...req.user,name:r.rows[0]?.name||req.user.name,image:r.rows[0]?.image||null});}catch{res.status(500).json({error:"Could not load account."});}});
 app.get("/health",async(_req,res)=>{try{await ensureSchema();await pool.query("SELECT 1");res.json({ok:true,database:"connected"});}catch{res.status(500).json({ok:false,error:"Database connection failed"});}});
 app.get("/teams",async(_req,res)=>{try{await ensureSchema();const r=await pool.query("SELECT team_id AS id,COUNT(*) AS matches,ROUND(AVG(pollen_auto+pollen_teleop+nectar_auto+nectar_teleop),1) AS avg_score FROM scouting_records GROUP BY team_id ORDER BY avg_score DESC");res.json(r.rows);}catch{res.status(500).json({error:"Could not load teams"});}});
 app.get("/analytics",async(_req,res)=>{try{await ensureSchema();const r=await pool.query("SELECT COUNT(*)::int AS matches,COUNT(DISTINCT team_id)::int AS teams,COALESCE(ROUND(AVG(pollen_auto+pollen_teleop+nectar_auto+nectar_teleop),1),0) AS avg_score,COALESCE(ROUND(AVG(rp),1),0) AS avg_rp FROM scouting_records");res.json(r.rows[0]);}catch{res.status(500).json({error:"Could not load analytics"});}});
