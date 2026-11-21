@@ -4,7 +4,8 @@ import {createRoot} from "react-dom/client";
 import {Activity,BarChart3,CalendarDays,Check,ChevronRight,ClipboardList,Cloud,Home,Menu,Minus,Plus,Search,Settings,Shield,Star,Target,Trophy,Users,X,Zap} from "lucide-react";
 import "./styles.css";
 
-const apiFetch=(url,options={})=>fetch(url,{credentials:"include",...options,headers:{...(options.headers||{})}});\nconst initial={match_number:"",team_id:"",alliance:"RED",scout_name:"",pollen_auto:0,nectar_auto:0,tips_auto:0,pollen_teleop:0,nectar_teleop:0,tips_teleop:0,flower:false,turret:false,climber:"None",endgame:"None",rp:0,result:"Unknown",driver_rating:0,scoring_rating:0,defense_rating:0,reliability_rating:0,notes:"",tags:[]};
+const apiFetch=(url,options={})=>fetch(url,{credentials:"include",...options,headers:{...(options.headers||{})}});
+const initial={match_number:"",team_id:"",alliance:"RED",scout_name:"",pollen_auto:0,nectar_auto:0,tips_auto:0,pollen_teleop:0,nectar_teleop:0,tips_teleop:0,flower:false,turret:false,climber:"None",endgame:"None",rp:0,result:"Unknown",driver_rating:0,scoring_rating:0,defense_rating:0,reliability_rating:0,notes:"",tags:[]};
 const tags=["Fast","Accurate","Strong Defense","Good Auto","Reliable","High Scoring","Good Driver","Mechanical Issue","Electrical Issue","Intake Issue"];
 function App(){const [page,setPage]=useState("home"),[modal,setModal]=useState(false),[editing,setEditing]=useState(null),[teams,setTeams]=useState([]),[stats,setStats]=useState({}),[online,setOnline]=useState(navigator.onLine),[queue,setQueue]=useState(JSON.parse(localStorage.getItem("bb_queue")||"[]"));
 const load=async()=>{try{const a=await apiFetch("/api/teams").then(x=>x.json()),b=await apiFetch("/api/analytics").then(x=>x.json());setTeams(a);setStats(b)}catch{}};
