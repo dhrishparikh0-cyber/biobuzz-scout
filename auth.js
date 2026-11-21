@@ -31,7 +31,7 @@ export const auth = betterAuth({
   database: pool,
   secret: process.env.BETTER_AUTH_SECRET,
   baseURL,
-  trustedOrigins: [process.env.APP_ORIGIN, process.env.BETTER_AUTH_URL].filter(Boolean),
+  trustedOrigins: [...new Set([new URL(baseURL).origin, "https://biobuzz-scout-dhrishparikh0-7239.vercel.app"])],
   socialProviders: {
     google: {
       clientId: process.env.GOOGLE_CLIENT_ID || "",
