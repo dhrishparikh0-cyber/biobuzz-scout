@@ -1,4 +1,4 @@
-import { auth, ensureAuthSchema } from "../../../../auth.js";
+import { auth, ensureAuthSchema } from "../../../auth.js";
 import { toNodeHandler } from "better-auth/node";
 
 const authHandler = toNodeHandler(auth);
