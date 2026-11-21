@@ -1,8 +1,18 @@
 import express from "express";
 import pg from "pg";
-import { roleForEmail } from "../auth.js";
+import { auth, ensureAuthSchema, roleForEmail } from "../auth.js";
+import { toNodeHandler, fromNodeHeaders } from "better-auth/node";
 const { Pool } = pg;
 const app = express();
+const authHandler = toNodeHandler(auth);
+app.all("/api/auth/*splat", async (req, res, next) => {
+  try {
+    await ensureAuthSchema();
+    return authHandler(req, res, next);
+  } catch (error) {
+    next(error);
+  }
+});
 app.use((req,_res,next)=>{if(req.url.startsWith("/api/"))req.url=req.url.slice(4);next();});
 app.use(express.json({limit:"1mb"}));
 const pool=new Pool({connectionString:process.env.DATABASE_URL,ssl:{rejectUnauthorized:false},max:1,idleTimeoutMillis:10000,connectionTimeoutMillis:10000});
@@ -26,11 +36,17 @@ async function ensureSchema(){
  await schemaReady;
 }
 async function requireUser(req,res,next){
- const email=String(req.headers["x-scout-email"]||"").trim().toLowerCase();
- const role=roleForEmail(email);
- if(!email)return res.status(401).json({error:"Enter your approved email address to continue."});
- if(!role)return res.status(403).json({error:"This email is not approved for BioBuzz Scout."});
- req.user={email,role,name:email};next();
+ try {
+  await ensureAuthSchema();
+  const session = await auth.api.getSession({ headers: fromNodeHeaders(req.headers) });
+  const email = String(session?.user?.email || "").trim().toLowerCase();
+  const role = roleForEmail(email);
+  if (!email || !role) return res.status(401).json({error:"Sign in with an approved Google account to continue."});
+  req.user={email,role,name:session.user.name||email,id:session.user.id};
+  next();
+ } catch (error) {
+  next(error);
+ }
 }
 app.use(requireUser);
 app.get("/me",(req,res)=>res.json(req.user));
