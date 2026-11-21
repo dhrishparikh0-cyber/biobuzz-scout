@@ -1,6 +1,5 @@
 import { betterAuth } from "better-auth";
 import { APIError } from "better-auth/api";
-import { getMigrations } from "better-auth/db/migration";
 import { Pool } from "pg";
 
 const pool = new Pool({
@@ -37,18 +36,7 @@ export const auth = betterAuth({
     google: {
       clientId: process.env.GOOGLE_CLIENT_ID || "",
       clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
-      requireEmailVerification: true,
       prompt: "select_account",
-    },
-  },
-  user: {
-    validateUserInfo: ({ user }) => {
-      if (!roleForEmail(user.email)) {
-        return {
-          error: "email_not_allowed",
-          errorDescription: "This Google account is not approved for BioBuzz Scout.",
-        };
-      }
     },
   },
   databaseHooks: {
@@ -72,16 +60,59 @@ export const auth = betterAuth({
   telemetry: { enabled: false },
 });
 
-let migrationPromise;
+let schemaPromise;
 export async function ensureAuthSchema() {
-  if (!migrationPromise) {
-    migrationPromise = (async () => {
-      const { runMigrations } = await getMigrations(auth.options);
-      await runMigrations();
-    })().catch((error) => {
-      migrationPromise = undefined;
+  if (!schemaPromise) {
+    schemaPromise = pool.query(`
+      CREATE TABLE IF NOT EXISTS "user" (
+        "id" TEXT PRIMARY KEY,
+        "name" TEXT NOT NULL,
+        "email" TEXT NOT NULL UNIQUE,
+        "emailVerified" BOOLEAN NOT NULL DEFAULT FALSE,
+        "image" TEXT,
+        "createdAt" TIMESTAMP NOT NULL DEFAULT NOW(),
+        "updatedAt" TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+      CREATE TABLE IF NOT EXISTS "session" (
+        "id" TEXT PRIMARY KEY,
+        "expiresAt" TIMESTAMP NOT NULL,
+        "token" TEXT NOT NULL UNIQUE,
+        "createdAt" TIMESTAMP NOT NULL DEFAULT NOW(),
+        "updatedAt" TIMESTAMP NOT NULL DEFAULT NOW(),
+        "ipAddress" TEXT,
+        "userAgent" TEXT,
+        "userId" TEXT NOT NULL REFERENCES "user"("id") ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS "session_userId_idx" ON "session"("userId");
+      CREATE TABLE IF NOT EXISTS "account" (
+        "id" TEXT PRIMARY KEY,
+        "accountId" TEXT NOT NULL,
+        "providerId" TEXT NOT NULL,
+        "userId" TEXT NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
+        "accessToken" TEXT,
+        "refreshToken" TEXT,
+        "idToken" TEXT,
+        "accessTokenExpiresAt" TIMESTAMP,
+        "refreshTokenExpiresAt" TIMESTAMP,
+        "scope" TEXT,
+        "password" TEXT,
+        "createdAt" TIMESTAMP NOT NULL DEFAULT NOW(),
+        "updatedAt" TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS "account_userId_idx" ON "account"("userId");
+      CREATE TABLE IF NOT EXISTS "verification" (
+        "id" TEXT PRIMARY KEY,
+        "identifier" TEXT NOT NULL,
+        "value" TEXT NOT NULL,
+        "expiresAt" TIMESTAMP NOT NULL,
+        "createdAt" TIMESTAMP DEFAULT NOW(),
+        "updatedAt" TIMESTAMP DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS "verification_identifier_idx" ON "verification"("identifier");
+    `).catch(error => {
+      schemaPromise = undefined;
       throw error;
     });
   }
-  return migrationPromise;
+  await schemaPromise;
 }
