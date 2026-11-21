@@ -1,6 +1,6 @@
 import express from "express";
 import pg from "pg";
-import { toNodeHandler } from "better-auth/node";
+import { toNodeHandler, fromNodeHeaders } from "better-auth/node";
 import { auth, roleForEmail } from "../auth.js";
 const { Pool } = pg;
 const app = express();
@@ -29,7 +29,7 @@ async function ensureSchema(){
 }
 async function requireUser(req,res,next){
  try{
-  const session=await auth.api.getSession({headers:req.headers});
+  const session=await auth.api.getSession({headers:fromNodeHeaders(req.headers)});
   if(!session?.user?.email)return res.status(401).json({error:"Please sign in to continue."});
   const email=session.user.email.trim().toLowerCase(),role=roleForEmail(email);
   if(!role)return res.status(403).json({error:"This email is not approved for BioBuzz Scout."});
