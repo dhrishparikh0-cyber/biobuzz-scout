@@ -78,7 +78,7 @@ function AuthGate(){
  const enter=async()=>{
   setBusy(true);setError("");
   try{
-   const result=await authClient.signIn.social({provider:"google",callbackURL:"https://biobuzz-scout-dhrishparikh0-7239.vercel.app"});
+   const result=await authClient.signIn.social({provider:"google",callbackURL:window.location.origin});
    if(result?.error)throw Error(result.error.message||"Google sign-in could not be started.");
   }catch(e){setError(e.message||"Google sign-in failed.");setBusy(false)}
  };
