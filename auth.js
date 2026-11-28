@@ -11,7 +11,10 @@ const pool = new Pool({
 });
 
 const emails = (value, fallback) =>
-  (value || fallback).split(",").map(x => x.trim().toLowerCase()).filter(Boolean);
+  String(value || fallback || "")
+    .split(/[\\s,;]+/)
+    .map(x => x.trim().toLowerCase())
+    .filter(Boolean);
 
 export function roleForEmail(email) {
   const normalized = String(email || "").trim().toLowerCase();
@@ -25,13 +28,21 @@ export function roleForEmail(email) {
 const baseURL =
   process.env.BETTER_AUTH_URL ||
   process.env.APP_ORIGIN ||
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:5173");
+  (process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+    : process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : "http://localhost:5173");
 
 export const auth = betterAuth({
   database: pool,
   secret: process.env.BETTER_AUTH_SECRET,
   baseURL,
-  trustedOrigins: [...new Set([new URL(baseURL).origin, "https://biobuzz-scout-dhrishparikh0-7239.vercel.app", "https://biobuzz-scout.vercel.app"])],
+  trustedOrigins: [...new Set([
+    new URL(baseURL).origin,
+    "https://biobuzz-scout.vercel.app",
+    ...(process.env.VERCEL_PROJECT_PRODUCTION_URL ? [`https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`] : []),
+  ])],
   socialProviders: {
     google: {
       clientId: process.env.GOOGLE_CLIENT_ID || "",
