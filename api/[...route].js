@@ -51,7 +51,7 @@ async function ensureSchema(){
  if(!schemaReady)schemaReady=pool.query(`
  CREATE TABLE IF NOT EXISTS scouting_records(
  id SERIAL PRIMARY KEY,event_name TEXT NOT NULL DEFAULT 'BioBuzz',season TEXT NOT NULL DEFAULT '2026-27',
- match_number INTEGER NOT NULL,team_id INTEGER NOT NULL,alliance TEXT NOT NULL CHECK(alliance IN('RED','BLUE')),
+ match_number TEXT NOT NULL,team_id INTEGER NOT NULL,alliance TEXT NOT NULL CHECK(alliance IN('RED','BLUE')),
  scout_name TEXT,pollen_auto INTEGER NOT NULL DEFAULT 0,nectar_auto INTEGER NOT NULL DEFAULT 0,tips_auto INTEGER NOT NULL DEFAULT 0,
  pollen_teleop INTEGER NOT NULL DEFAULT 0,nectar_teleop INTEGER NOT NULL DEFAULT 0,tips_teleop INTEGER NOT NULL DEFAULT 0,
  flower BOOLEAN NOT NULL DEFAULT FALSE,turret BOOLEAN NOT NULL DEFAULT FALSE,mecanum BOOLEAN NOT NULL DEFAULT FALSE,hood BOOLEAN NOT NULL DEFAULT FALSE,parking BOOLEAN NOT NULL DEFAULT FALSE,
@@ -59,6 +59,7 @@ async function ensureSchema(){
  driver_rating INTEGER NOT NULL DEFAULT 0,scoring_rating INTEGER NOT NULL DEFAULT 0,defense_rating INTEGER NOT NULL DEFAULT 0,
  reliability_rating INTEGER NOT NULL DEFAULT 0,notes TEXT,tags TEXT[] NOT NULL DEFAULT '{}',created_by_email TEXT,created_at TIMESTAMPTZ DEFAULT NOW());
  ALTER TABLE scouting_records ADD COLUMN IF NOT EXISTS created_by_email TEXT;
+ ALTER TABLE scouting_records ALTER COLUMN match_number TYPE TEXT USING match_number::text;
  ALTER TABLE scouting_records ADD COLUMN IF NOT EXISTS mecanum BOOLEAN NOT NULL DEFAULT FALSE;
  ALTER TABLE scouting_records ADD COLUMN IF NOT EXISTS hood BOOLEAN NOT NULL DEFAULT FALSE;
  ALTER TABLE scouting_records ADD COLUMN IF NOT EXISTS parking BOOLEAN NOT NULL DEFAULT FALSE;
@@ -114,8 +115,8 @@ app.post("/events/:id/matches",async(req,res)=>{if(req.user.role!=="mentor")retu
 app.post("/events/:id/import",async(req,res)=>{if(req.user.role!=="mentor")return res.status(403).json({error:"Mentor access required."});try{await ensureSchema();const eventId=Number(req.params.id),items=Array.isArray(req.body?.matches)?req.body.matches:[];if(!items.length||items.length>2000)return res.status(400).json({error:"Import between 1 and 2,000 matches."});const client=await pool.connect();let count=0;try{await client.query("BEGIN");for(let rowIndex=0;rowIndex<items.length;rowIndex++){const item=items[rowIndex],type=String(item.match_type||"S").toUpperCase(),n=Number(item.match_number);if(!["S","Q","P","F","PRACTICE"].includes(type)||!Number.isInteger(n)||n<1)throw Error("Invalid match type or number on CSV row "+(rowIndex+2)+".");const label=type==="PRACTICE"?"Practice "+n:type+n;const parseTeams=v=>(Array.isArray(v)?v:String(v||"").split(/[;,| ]+/)).map(Number).filter(x=>Number.isInteger(x)&&x>0);const red=parseTeams(item.red_teams),blue=parseTeams(item.blue_teams);if(red.length!==2||blue.length!==2||new Set([...red,...blue]).size!==4)throw Error("CSV row "+(rowIndex+2)+" must contain four different teams: two Red and two Blue.");await client.query("INSERT INTO event_matches(event_id,match_type,match_number,match_label,scheduled_at,red_teams,blue_teams) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(event_id,match_type,match_number) DO UPDATE SET match_label=EXCLUDED.match_label,scheduled_at=EXCLUDED.scheduled_at,red_teams=EXCLUDED.red_teams,blue_teams=EXCLUDED.blue_teams",[eventId,type,n,label,item.scheduled_at||null,red,blue]);count++;}await client.query("COMMIT");}catch(e){await client.query("ROLLBACK");throw e;}finally{client.release();}await pool.query("INSERT INTO activity_logs(actor_email,action,entity_type,entity_id,details) VALUES($1,$2,$3,$4,$5::jsonb)",[req.user.email,"schedule_imported","event",String(eventId),JSON.stringify({imported:count})]);res.json({ok:true,imported:count});}catch(e){res.status(400).json({error:e.message||"Could not import schedule."});}});
 const fields=["match_number","team_id","alliance","scout_name","event_id","match_type","match_label","event_name","season","pollen_auto","nectar_auto","tips_auto","pollen_teleop","nectar_teleop","tips_teleop","flower","turret","mecanum","hood","parking","endgame","rp","result","driver_rating","scoring_rating","defense_rating","reliability_rating","notes","tags"];
 function values(d){
- const match=Number(d.match_number),team=Number(d.team_id);
- if(!Number.isInteger(match)||match<1||!Number.isInteger(team)||team<1||!["RED","BLUE"].includes(d.alliance))throw Error("Valid match number, team number, and alliance are required.");
+ const match=String(d.match_number||"").trim(),team=Number(d.team_id);
+ if(!/^[A-Za-z]+[A-Za-z0-9._-]*$|^\d+$/.test(match)||match.length>30||!Number.isInteger(team)||team<1||!["RED","BLUE"].includes(d.alliance))throw Error("Valid match number, team number, and alliance are required.");
  if(d.event_id!==undefined&&d.event_id!==null&&d.event_id!==""&&(!Number.isInteger(Number(d.event_id))||Number(d.event_id)<1))throw Error("Invalid event.");
  if(d.match_type!==undefined&&!["S","Q","P","F","PRACTICE"].includes(String(d.match_type).toUpperCase()))throw Error("Invalid match type.");
  const ns=fields.filter(k=>["match_number","team_id","pollen_auto","nectar_auto","tips_auto","pollen_teleop","nectar_teleop","tips_teleop","rp","driver_rating","scoring_rating","defense_rating","reliability_rating"].includes(k));
