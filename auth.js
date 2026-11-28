@@ -12,7 +12,7 @@ const pool = new Pool({
 
 const emails = (value, fallback) =>
   String(value || fallback || "")
-    .split(/[\\s,;]+/)
+    .split(/[\s,;]+/)
     .map(x => x.trim().toLowerCase())
     .filter(Boolean);
 
